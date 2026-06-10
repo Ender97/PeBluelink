@@ -1,0 +1,41 @@
+{
+    "author": "Kevin A. Bizzoco",
+    "dependencies": {},
+    "keywords": [],
+    "name": "pebluelink",
+    "pebble": {
+        "capabilities": [
+            "configurable"
+        ],
+        "displayName": "PeBluelink",
+        "enableMultiJS": true,
+        "messageKeys": [],
+        "projectType": "native",
+        "resources": {
+            "media": [
+                {
+                    "file": "images/hyundai.png",
+                    "menuIcon": true,
+                    "name": "icon",
+                    "targetPlatforms": null,
+                    "type": "pbi"
+                }
+            ]
+        },
+        "sdkVersion": "3",
+        "targetPlatforms": [
+            "aplite",
+            "basalt",
+            "chalk",
+            "diorite",
+            "emery",
+            "gabbro",
+            "flint"
+        ],
+        "uuid": "765d084f-3d8c-4da8-a278-6b45ec18744c",
+        "watchapp": {
+            "watchface": false
+        }
+    },
+    "version": "0.9.0"
+}
