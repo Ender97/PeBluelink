@@ -1,50 +1,27 @@
-// Hyundai Bluelink - Pebble Time 2 (Emery) - C SDK
+// PeBluelink  - Pebble Time 2 (Emery) - C SDK
 // src/c/bluelink.c
-//
-// Windows:
-//   menu_window     - MenuLayer: 5 base + 2 EV-only actions + Settings
-//   settings_window - toggles: EV features, 12V battery, °F/°C
-//   status_window   - TextLayer grid (rows shown/hidden per settings)
-//   confirm_window  - confirmation before destructive commands
-//   temp_window     - temperature picker before Remote Start
-//   feedback_window - full-screen success/error, auto-pops after 2.5s
-//
-// Persist keys (survive app restart, no phone needed):
-//   PERSIST_EV_ENABLED    0  bool: show EV rows + charge commands
-//   PERSIST_12V_ENABLED   1  bool: show 12V battery row
-//   PERSIST_USE_FAHRENHEIT 2 bool: temp picker in °F vs °C
-//
-// AppMessage keys (must match Android PebbleMessageReceiver.kt):
-//   KEY_CMD          0
-//   KEY_RESULT       1
-//   KEY_MSG          2
-//   KEY_LOCKED       3
-//   KEY_TEMP         4
-//   KEY_RANGE        5
-//   KEY_CHARGING     6
-//   KEY_CHARGE_TIME  7
-//   KEY_TWELVE_SOC   8
-//   KEY_CLIMATE_TEMP 9
 
 #include <pebble.h>
 
 // ── AppMessage keys ───────────────────────────────────────────────────────────
-#define KEY_CMD          0
-#define KEY_RESULT       1
-#define KEY_MSG          2
-#define KEY_LOCKED       3
-#define KEY_TEMP         4
-#define KEY_RANGE        5
-#define KEY_CHARGING     6
-#define KEY_CHARGE_TIME  7
-#define KEY_TWELVE_SOC   8
-#define KEY_CLIMATE_TEMP 9
+// (must match Android PebbleMessageReceiver.kt):
+#define KEY_CMD            0
+#define KEY_RESULT         1
+#define KEY_MSG            2
+#define KEY_LOCKED         3
+#define KEY_TEMP           4
+#define KEY_RANGE          5
+#define KEY_CHARGING       6
+#define KEY_CHARGE_TIME    7
+#define KEY_TWELVE_SOC     8
+#define KEY_CLIMATE_TEMP   9
+#define KEY_EV_SOC         10
 
 // ── Persist keys ──────────────────────────────────────────────────────────────
-#define PERSIST_EV_ENABLED      0
-#define PERSIST_12V_ENABLED     1
-#define PERSIST_USE_FAHRENHEIT  2
-#define PERSIST_USE_MILES       3
+#define PERSIST_EV_ENABLED      0  //show EV status items & charging commands
+#define PERSIST_12V_ENABLED     1  //show 12V battery SOC
+#define PERSIST_USE_FAHRENHEIT  2  //temp picker °F vs °C
+#define PERSIST_USE_MILES       3  //mi/km showin in status
 
 // ── Menu ──────────────────────────────────────────────────────────────────────
 // All possible items; EV-only ones are filtered at draw/select time
@@ -92,6 +69,7 @@ static int  s_range             = 0;
 static bool s_charging          = false;
 static int  s_charge_time_mins  = 0;
 static int  s_twelve_soc        = 0;
+static int  s_ev_soc            = 0;
 static int  s_climate_temp_f    = 70;
 
 // ── Visible menu helpers ──────────────────────────────────────────────────────
@@ -155,7 +133,7 @@ static void feedback_window_load(Window *window) {
   s_feedback_msg_layer = text_layer_create(
       GRect(8, 118, bounds.size.w - 16, 60));
   text_layer_set_font(s_feedback_msg_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+                      fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
   text_layer_set_text_alignment(s_feedback_msg_layer, GTextAlignmentCenter);
   text_layer_set_background_color(s_feedback_msg_layer, GColorClear);
   layer_add_child(root, text_layer_get_layer(s_feedback_msg_layer));
@@ -163,7 +141,7 @@ static void feedback_window_load(Window *window) {
   s_feedback_hint_layer = text_layer_create(
       GRect(0, bounds.size.h - 22, bounds.size.w, 18));
   text_layer_set_font(s_feedback_hint_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_14));
+                      fonts_get_system_font(FONT_KEY_GOTHIC_18));
   text_layer_set_text_alignment(s_feedback_hint_layer, GTextAlignmentCenter);
   text_layer_set_text(s_feedback_hint_layer, "Returns automatically...");
   text_layer_set_background_color(s_feedback_hint_layer, GColorClear);
@@ -171,7 +149,7 @@ static void feedback_window_load(Window *window) {
 }
 
 static void feedback_window_appear(Window *window) {
-  s_feedback_timer = app_timer_register(3000, feedback_timer_callback, NULL);
+  s_feedback_timer = app_timer_register(2500, feedback_timer_callback, NULL);
 }
 
 static void feedback_window_unload(Window *window) {
@@ -229,10 +207,10 @@ typedef struct {
 } SettingItem;
 
 static SettingItem SETTINGS[NUM_SETTINGS] = {
-  { "EV Features",                     &s_ev_enabled     },
-  { "12V Battery",                     &s_12v_enabled    },
-  { "Fahrenheit (off for C)",          &s_use_fahrenheit },
-  { "Miles (off for Km)",              &s_use_miles      },
+  { "EV Features",  &s_ev_enabled     },
+  { "12V Battery",  &s_12v_enabled    },
+  { "Fahrenheit",   &s_use_fahrenheit },
+  { "Miles",        &s_use_miles      },
 };
 
 static uint16_t settings_get_num_sections(MenuLayer *ml, void *ctx) { return 1; }
@@ -255,7 +233,7 @@ static int16_t settings_get_header_height(MenuLayer *ml, uint16_t section,
 static void settings_draw_header(GContext *ctx, const Layer *cell_layer,
                                  uint16_t section, void *cb_ctx) {
   GRect bounds = layer_get_bounds(cell_layer);
-  graphics_context_set_fill_color(ctx, GColorDarkGray);
+  graphics_context_set_fill_color(ctx, GColorCobaltBlue);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
   graphics_context_set_text_color(ctx, GColorWhite);
   graphics_draw_text(ctx, "Settings",
@@ -278,7 +256,7 @@ static void settings_draw_row(GContext *ctx, const Layer *cell_layer,
   // Title
   graphics_context_set_text_color(ctx, GColorWhite);
   graphics_draw_text(ctx, item->title,
-                     fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
+                     fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD),
                      GRect(8, 4, bounds.size.w - 52, 22),
                      GTextOverflowModeTrailingEllipsis,
                      GTextAlignmentLeft, NULL);
@@ -291,7 +269,7 @@ static void settings_draw_row(GContext *ctx, const Layer *cell_layer,
       GRect(bounds.size.w - 44, 10, 36, 22), 4, GCornersAll);
   graphics_context_set_text_color(ctx, GColorWhite);
   graphics_draw_text(ctx, on ? "ON" : "OFF",
-                     fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD),
+                     fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
                      GRect(bounds.size.w - 44, 11, 36, 18),
                      GTextOverflowModeTrailingEllipsis,
                      GTextAlignmentCenter, NULL);
@@ -318,7 +296,7 @@ static void settings_window_load(Window *window) {
 
   s_settings_layer = menu_layer_create(bounds);
   menu_layer_set_normal_colors(s_settings_layer,    GColorDarkGray, GColorWhite);
-  menu_layer_set_highlight_colors(s_settings_layer, GColorCobaltBlue,      GColorWhite);
+  menu_layer_set_highlight_colors(s_settings_layer, GColorOxfordBlue,      GColorWhite);
   menu_layer_set_callbacks(s_settings_layer, NULL, (MenuLayerCallbacks){
     .get_num_sections  = settings_get_num_sections,
     .get_num_rows      = settings_get_num_rows,
@@ -374,11 +352,11 @@ static void temp_update_display(void) {
 }
 
 static void temp_up_click(ClickRecognizerRef rec, void *ctx) {
-  if (s_climate_temp_f < 90) { s_climate_temp_f++; temp_update_display(); }
+  if (s_climate_temp_f < 82) { s_climate_temp_f++; temp_update_display(); }
 }
 
 static void temp_down_click(ClickRecognizerRef rec, void *ctx) {
-  if (s_climate_temp_f > 60) { s_climate_temp_f--; temp_update_display(); }
+  if (s_climate_temp_f > 62) { s_climate_temp_f--; temp_update_display(); }
 }
 
 static void temp_select_click(ClickRecognizerRef rec, void *ctx) {
@@ -418,7 +396,7 @@ static void temp_window_load(Window *window) {
   s_temp_hint_layer = text_layer_create(
       GRect(0, bounds.size.h - 38, bounds.size.w, 36));
   text_layer_set_font(s_temp_hint_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_14));
+                      fonts_get_system_font(FONT_KEY_GOTHIC_18));
   text_layer_set_text_alignment(s_temp_hint_layer, GTextAlignmentCenter);
   text_layer_set_text_color(s_temp_hint_layer, GColorLightGray);
   text_layer_set_background_color(s_temp_hint_layer, GColorClear);
@@ -473,7 +451,7 @@ static void confirm_window_load(Window *window) {
 
   s_confirm_title_layer = text_layer_create(GRect(0, 0, bounds.size.w, 36));
   text_layer_set_font(s_confirm_title_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
+                      fonts_get_system_font(FONT_KEY_GOTHIC_28_BOLD));
   text_layer_set_text_alignment(s_confirm_title_layer, GTextAlignmentCenter);
   text_layer_set_background_color(s_confirm_title_layer, GColorCobaltBlue);
   text_layer_set_text_color(s_confirm_title_layer, GColorWhite);
@@ -483,7 +461,7 @@ static void confirm_window_load(Window *window) {
   s_confirm_body_layer = text_layer_create(
       GRect(8, 50, bounds.size.w - 16, 120));
   text_layer_set_font(s_confirm_body_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
+                      fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(s_confirm_body_layer, GTextAlignmentCenter);
   text_layer_set_overflow_mode(s_confirm_body_layer, GTextOverflowModeWordWrap);
   text_layer_set_background_color(s_confirm_body_layer, GColorClear);
@@ -492,7 +470,7 @@ static void confirm_window_load(Window *window) {
   s_confirm_hint_layer = text_layer_create(
       GRect(0, bounds.size.h - 20, bounds.size.w, 18));
   text_layer_set_font(s_confirm_hint_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_14));
+                      fonts_get_system_font(FONT_KEY_GOTHIC_18));
   text_layer_set_text_alignment(s_confirm_hint_layer, GTextAlignmentCenter);
   text_layer_set_text(s_confirm_hint_layer, "BACK to cancel");
   text_layer_set_background_color(s_confirm_hint_layer, GColorClear);
@@ -544,12 +522,15 @@ static TextLayer *s_status_chargetime_label;
 static TextLayer *s_status_chargetime_val;
 static TextLayer *s_status_twelve_label;
 static TextLayer *s_status_twelve_val;
+static TextLayer *s_status_evsoc_label;
+static TextLayer *s_status_evsoc_val;
 
 static char s_locked_buf[16];
 static char s_range_buf[16];
 static char s_charging_buf[16];
 static char s_chargetime_buf[20];
 static char s_twelve_buf[12];
+static char s_evsoc_buf[12];
 
 static void status_update_display(void) {
   if (!s_status_window) return;
@@ -573,6 +554,12 @@ static void status_update_display(void) {
                    !s_12v_enabled);
   layer_set_hidden(text_layer_get_layer(s_status_twelve_val),
                    !s_12v_enabled);
+
+  // EV SOC row follows EV enabled setting
+  layer_set_hidden(text_layer_get_layer(s_status_evsoc_label),
+                   !s_ev_enabled);
+  layer_set_hidden(text_layer_get_layer(s_status_evsoc_val),
+                   !s_ev_enabled);
 
   if (!s_status_loaded) {
     text_layer_set_text(s_status_loading_layer, "Fetching status...");
@@ -608,11 +595,13 @@ static void status_update_display(void) {
   }
 
   snprintf(s_twelve_buf, sizeof(s_twelve_buf), "%d%%", s_twelve_soc);
+  snprintf(s_evsoc_buf,  sizeof(s_evsoc_buf),  "%d%%", s_ev_soc);
 
   text_layer_set_text(s_status_locked_val,     s_locked_buf);
   text_layer_set_text_color(s_status_locked_val,
       s_locked ? GColorMediumSpringGreen : GColorRed);
   text_layer_set_text(s_status_range_val,      s_range_buf);
+  text_layer_set_text(s_status_evsoc_val,      s_evsoc_buf);
   text_layer_set_text(s_status_charging_val,   s_charging_buf);
   text_layer_set_text(s_status_chargetime_val, s_chargetime_buf);
   text_layer_set_text(s_status_twelve_val,     s_twelve_buf);
@@ -623,7 +612,7 @@ static void make_status_row(Layer *root, int y, const char *label_str,
   int w = layer_get_bounds(root).size.w;
 
   *out_label = text_layer_create(GRect(8, y, 90, 20));
-  text_layer_set_font(*out_label, fonts_get_system_font(FONT_KEY_GOTHIC_14));
+  text_layer_set_font(*out_label, fonts_get_system_font(FONT_KEY_GOTHIC_18));
   text_layer_set_text_color(*out_label, GColorLightGray);
   text_layer_set_background_color(*out_label, GColorClear);
   text_layer_set_text(*out_label, label_str);
@@ -631,7 +620,7 @@ static void make_status_row(Layer *root, int y, const char *label_str,
 
   *out_value = text_layer_create(GRect(w / 2, y, w / 2 - 8, 20));
   text_layer_set_font(*out_value,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_14_BOLD));
+                      fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD));
   text_layer_set_text_alignment(*out_value, GTextAlignmentRight);
   text_layer_set_text_color(*out_value, GColorWhite);
   text_layer_set_background_color(*out_value, GColorClear);
@@ -643,7 +632,7 @@ static void status_window_load(Window *window) {
   Layer *root = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(root);
 
-  s_status_title_layer = text_layer_create(GRect(0, 0, bounds.size.w, 36));
+  s_status_title_layer = text_layer_create(GRect(0, 4, bounds.size.w, 28));
   text_layer_set_font(s_status_title_layer,
                       fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD));
   text_layer_set_text_alignment(s_status_title_layer, GTextAlignmentCenter);
@@ -654,7 +643,7 @@ static void status_window_load(Window *window) {
 
   s_status_loading_layer = text_layer_create(GRect(0, 90, bounds.size.w, 28));
   text_layer_set_font(s_status_loading_layer,
-                      fonts_get_system_font(FONT_KEY_GOTHIC_18));
+                      fonts_get_system_font(FONT_KEY_GOTHIC_24));
   text_layer_set_text_alignment(s_status_loading_layer, GTextAlignmentCenter);
   text_layer_set_background_color(s_status_loading_layer, GColorClear);
   text_layer_set_text_color(s_status_loading_layer, GColorLightGray);
@@ -665,11 +654,13 @@ static void status_window_load(Window *window) {
                   &s_status_locked_label,     &s_status_locked_val);
   make_status_row(root,  62, "Range",
                   &s_status_range_label,      &s_status_range_val);
-  make_status_row(root,  84, "Charging",
+  make_status_row(root,  84, "EV %",
+                  &s_status_evsoc_label,      &s_status_evsoc_val);
+  make_status_row(root, 106, "Charging",
                   &s_status_charging_label,   &s_status_charging_val);
-  make_status_row(root, 106, "Time left",
+  make_status_row(root, 128, "Time left",
                   &s_status_chargetime_label, &s_status_chargetime_val);
-  make_status_row(root, 128, "12V Bat",
+  make_status_row(root, 150, "12V Bat",
                   &s_status_twelve_label,     &s_status_twelve_val);
 
   status_update_display();
@@ -683,6 +674,8 @@ static void status_window_unload(Window *window) {
   text_layer_destroy(s_status_locked_val);
   text_layer_destroy(s_status_range_label);
   text_layer_destroy(s_status_range_val);
+  text_layer_destroy(s_status_evsoc_label);
+  text_layer_destroy(s_status_evsoc_val);
   text_layer_destroy(s_status_charging_label);
   text_layer_destroy(s_status_charging_val);
   text_layer_destroy(s_status_chargetime_label);
@@ -717,7 +710,7 @@ static uint16_t menu_get_num_rows(MenuLayer *ml, uint16_t section, void *ctx) {
 }
 
 static int16_t menu_get_cell_height(MenuLayer *ml, MenuIndex *idx, void *ctx) {
-  return 44;
+  return 52;
 }
 
 static int16_t menu_get_header_height(MenuLayer *ml, uint16_t section,
@@ -731,7 +724,7 @@ static void menu_draw_header(GContext *ctx, const Layer *cell_layer,
   graphics_context_set_fill_color(ctx, GColorCobaltBlue);
   graphics_fill_rect(ctx, bounds, 0, GCornerNone);
   graphics_context_set_text_color(ctx, GColorWhite);
-  graphics_draw_text(ctx, "BlueLink",
+  graphics_draw_text(ctx, "PeBluelink",
                      fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
                      GRect(0, 4, bounds.size.w, 28),
                      GTextOverflowModeTrailingEllipsis,
@@ -751,7 +744,7 @@ static void menu_draw_row(GContext *ctx, const Layer *cell_layer,
 
   graphics_context_set_text_color(ctx, GColorWhite);
   graphics_draw_text(ctx, item->title,
-                     fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD),
+                     fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
                      GRect(8, 4, bounds.size.w - 20, 22),
                      GTextOverflowModeTrailingEllipsis,
                      GTextAlignmentLeft, NULL);
@@ -759,8 +752,8 @@ static void menu_draw_row(GContext *ctx, const Layer *cell_layer,
   graphics_context_set_text_color(ctx,
       highlighted ? GColorWhite : GColorLightGray);
   graphics_draw_text(ctx, item->subtitle,
-                     fonts_get_system_font(FONT_KEY_GOTHIC_14),
-                     GRect(8, 24, bounds.size.w - 20, 18),
+                     fonts_get_system_font(FONT_KEY_GOTHIC_18),
+                     GRect(8, 28, bounds.size.w-20, 18),
                      GTextOverflowModeTrailingEllipsis,
                      GTextAlignmentLeft, NULL);
 }
@@ -788,7 +781,7 @@ static void menu_window_load(Window *window) {
 
   s_menu_layer = menu_layer_create(bounds);
   menu_layer_set_normal_colors(s_menu_layer,    GColorDarkGray, GColorWhite);
-  menu_layer_set_highlight_colors(s_menu_layer, GColorFolly,      GColorWhite);
+  menu_layer_set_highlight_colors(s_menu_layer, GColorOxfordBlue,      GColorWhite);
   menu_layer_set_callbacks(s_menu_layer, NULL, (MenuLayerCallbacks){
     .get_num_sections  = menu_get_num_sections,
     .get_num_rows      = menu_get_num_rows,
@@ -844,6 +837,7 @@ static void inbox_received(DictionaryIterator *iter, void *ctx) {
   Tuple *charging_t   = dict_find(iter, KEY_CHARGING);
   Tuple *chargetime_t = dict_find(iter, KEY_CHARGE_TIME);
   Tuple *twelve_t     = dict_find(iter, KEY_TWELVE_SOC);
+  Tuple *evsoc_t      = dict_find(iter, KEY_EV_SOC);
 
   if (locked_t) {
     s_locked           = (locked_t->value->int32 == 1);
@@ -851,6 +845,7 @@ static void inbox_received(DictionaryIterator *iter, void *ctx) {
     s_charging         = charging_t   ? (charging_t->value->int32 == 1) : false;
     s_charge_time_mins = chargetime_t ? (int)chargetime_t->value->int32 : 0;
     s_twelve_soc       = twelve_t     ? (int)twelve_t->value->int32     : 0;
+    s_ev_soc           = evsoc_t      ? (int)evsoc_t->value->int32      : 0;
     s_status_loaded    = true;
     status_update_display();
     return;
