@@ -10,7 +10,7 @@ An open source Pebble Watchapp application that acts as a remote to interact wit
 - Configurable settings for some display functions
 
 ## Requirements
-- **Pebble Watch**: All models supported. Install PeBluelink watchapp from Pebble appstore or the latest .pbw from [RELEASES](RELSEASES).
+- **Pebble Watch**: All models supported. Install PeBluelink watchapp from Pebble appstore or the latest .pbw from [RELEASES](https://github.com/Ender97/PeBluelink/releases).
 - **Hyundai Bluelink Account**: Active subscription with a compatible vehicle.
 - **Companion App**: Requires Android 8.0 (Oreo) or higher. [](https://github.com/Ender97/PeBluelink-Companion)
 
@@ -22,6 +22,6 @@ This project uses:
 - **PebbleKit** for communication between the phone and watch.
 
 **AI Disclosure:** 
-This app was written in C mostly by me, but with some assistance from Anthropic's Claude Code 4.6.
+This app was written in C mostly by me, with some assistance from Anthropic's Claude Code 4.6.
 
 MIT License - see [LICENSE](LICENSE) file for details.
