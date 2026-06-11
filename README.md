@@ -1,6 +1,6 @@
 # PeBluelink
 
-An open source Pebble watch app that acts as a remote to interact with Hyundai Bluelink compatible vehicles. Needs the Android companion app to function [](https://github.com/Ender97/PeBluelink-Companion), requires a Bluelink subscription, and is only confirmed to work in the USA. Canada and Europe regions are currently in BETA and are not guaranteed to work. 
+An open source Pebble watch app that acts as a remote to interact with Hyundai Bluelink compatible vehicles. Needs the Android companion app to function [https://github.com/Ender97/PeBluelink-Companion](https://github.com/Ender97/PeBluelink-Companion), requires a Bluelink subscription, and is only confirmed to work in the USA. Canada and Europe regions are currently in BETA and are not guaranteed to work. 
 
 ## Features
 - Retrieve and display vehicle status readouts
@@ -12,7 +12,7 @@ An open source Pebble watch app that acts as a remote to interact with Hyundai B
 ## Requirements
 - **Pebble Watch**: All models supported. Install PeBluelink watchapp from Pebble appstore or the latest .pbw from [RELEASES](https://github.com/Ender97/PeBluelink/releases).
 - **Hyundai Bluelink Account**: Active subscription with a compatible vehicle.
-- **Companion App**: Requires Android 8.0 (Oreo) or higher. [](https://github.com/Ender97/PeBluelink-Companion)
+- **Companion App**: Requires Android 8.0 (Oreo) or higher. [https://github.com/Ender97/PeBluelink-Companion](https://github.com/Ender97/PeBluelink-Companion)
 
 ## Credits
 This application and its creator are not affiliated with Hyundai Motor Company. 
