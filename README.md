@@ -24,4 +24,4 @@ This project uses:
 **AI Disclosure:** 
 This app was written in C mostly by me, with some assistance from Anthropic's Claude Code 4.6.
 
-MIT License - see [LICENSE](LICENSE) file for details.
+GNU License - see [LICENSE](LICENSE) file for details.
