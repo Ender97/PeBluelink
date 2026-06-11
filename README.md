@@ -15,6 +15,8 @@ An open source Pebble watch app that acts as a remote to interact with Hyundai B
 - **Companion App**: Requires Android 8.0 (Oreo) or higher. [https://github.com/Ender97/PeBluelink-Companion](https://github.com/Ender97/PeBluelink-Companion)
 
 ## Credits
+Developed and maintained by Kevin A. Bizzoco (aka EnderAccord or Ender97)
+
 This application and its creator are not affiliated with Hyundai Motor Company. 
 
 This project uses:
